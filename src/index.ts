@@ -1,20 +1,20 @@
-import {
-  Filter,
-  Message,
-  DateType,
-  StringFilter,
-  NumberFilter,
-  BooleanFilter,
-  DateFilter,
-  OrFilter,
-  AndFilter
-} from './types';
+import { Filter, Message } from './types';
 
-function filterMessages(messages: Message[], filter: Filter): Message[] {
-  function applyFilter(message: Message, filter: Filter): boolean {
+export function filterMessages(messages: Message[], filter: Filter): Message[] {
+  const applyFilter = (message: Message, filter: Filter): boolean => {
+    if (filter.type === 'or') {
+      return filter.filters.some((subFilter) => applyFilter(message, subFilter));
+    }
+    if (filter.type === 'and') {
+      return filter.filters.every((subFilter) => applyFilter(message, subFilter));
+    }
+
+    const value = message[filter.field];
+
     switch (filter.type) {
       case 'string':
-        const stringValue = message[filter.field] as string;
+        if (typeof value !== 'string') return false;
+        const stringValue = value as string;
         switch (filter.operation) {
           case 'eq':
             return stringValue === filter.value;
@@ -24,11 +24,11 @@ function filterMessages(messages: Message[], filter: Filter): Message[] {
             return stringValue.endsWith(filter.value);
           case 'contains':
             return stringValue.includes(filter.value);
-          default:
-            return false;
         }
+        break;
       case 'number':
-        const numberValue = message[filter.field] as number;
+        if (typeof value !== 'number') return false;
+        const numberValue = value as number;
         switch (filter.operation) {
           case 'eq':
             return numberValue === filter.value;
@@ -40,36 +40,28 @@ function filterMessages(messages: Message[], filter: Filter): Message[] {
             return numberValue >= filter.value;
           case 'lte':
             return numberValue <= filter.value;
-          default:
-            return false;
         }
+        break;
       case 'boolean':
-        const booleanValue = message[filter.field] as boolean;
-        return booleanValue === filter.value;
+        if (typeof value !== 'boolean') return false;
+        return value === filter.value;
       case 'date':
-        const dateValue = new Date(message[filter.field] as DateType);
-        const filterDate = new Date(filter.value);
+        const dateValue = new Date(value as string | Date);
+        const filterDate = new Date(filter.value as string | Date);
         switch (filter.operation) {
           case 'eq':
             return dateValue.getTime() === filterDate.getTime();
           case 'after':
-            return dateValue > filterDate;
+            return dateValue.getTime() > filterDate.getTime();
           case 'before':
-            return dateValue < filterDate;
-          default:
-            return false;
+            return dateValue.getTime() < filterDate.getTime();
         }
-      case 'or':
-        return filter.filters.some(subFilter => applyFilter(message, subFilter));
-      case 'and':
-        return filter.filters.every(subFilter => applyFilter(message, subFilter));
-      default:
-        return false;
+        break;
     }
-  }
 
-  return messages.filter(message => applyFilter(message, filter));
+    return false;
+  };
+
+  return messages.filter((message) => applyFilter(message, filter));
 }
-
-export { filterMessages };
 
